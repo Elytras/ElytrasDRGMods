@@ -1,0 +1,229 @@
+# build_presets.yaml
+
+# --- Core Paths ---
+uproject_path: "./FSD.uproject"
+ue4_cmd_path: "C:/Program Files/Epic Games/UE_4.27/Engine/Binaries/Win64/UE4Editor-Cmd.exe"
+staging_dir: "staging"
+package_dir: "packaged"
+
+# --- Path Variables ---
+# Use these in paths with {VAR_NAME}. They are expanded recursively.
+variables:
+  AS: "_AssemblyStorm"
+  EM: "_ElytrasMods"
+  CD2: "{AS}/CustomDifficulty2"
+  EEE: "{EM}/EEE_lib"
+
+# --- NoCook Aliases ---
+# Define reusable lists of directories to exclude from cooking.
+# Reference them in 'directories_to_never_cook' using the '@' prefix (e.g., '@base_game').
+nocook_aliases:
+  base_game:
+    - "_EditorBPs"
+    - "_MapDumper"
+    - "_ModHub"
+    - "AI"
+    - "Art"
+    - "Audio"
+    - "Character"
+    - "CharacterStructure"
+    - "Cinematics"
+    - "Critters"
+    - "Game"
+    - "GameElements"
+    - "Landscape"
+    - "LevelElements"
+    - "Maps"
+    - "Movies"
+    - "Particles"
+    - "PersonalFolders"
+    - "UI"
+    - "WeaponsNTools"
+    - "Enemies"
+    
+  third_party_libs:
+    - "DRGLib"
+    - "FXVarietyPack"
+    - "ShoutBoard"
+    - "M5VFXVOL2"
+    - "OpenWidgets"
+    - "UnifiedUI"
+    - "CAA_SnowV4"
+    - "Vefects"
+    
+  elytras_mods_core:
+    - "{EM}/Saved"
+    - "{EM}/dummies"
+    - "{EM}/Creator"
+    - "{EM}/DestroyerEX"
+    - "{EM}/Deactivator"
+    - "{EM}/Destroyer"
+    - "{EM}/NoLight"
+    - "{EEE}/Modules/NoCook"
+    
+  assembly_storm_core:
+    - "{AS}/_Interop/ResupplyCost"
+    - "{AS}/_Tests"
+    - "{AS}/ABetterModdingMenu"
+    - "{AS}/AdvancedDarkness"
+    - "{AS}/AdvancedLoadouts"
+    - "{AS}/BetterPostProcessing"
+    - "{AS}/BetterSpectator"
+    - "{AS}/BuildInspector"
+    - "{AS}/Cheats"
+    - "{AS}/Common"
+    - "{AS}/CustomDifficulty"
+    - "{AS}/CustomHUD"
+    - "{AS}/TestAssets"
+    - "{AS}/GenerousManagement"
+    - "{AS}/EventLog"
+    - "{AS}/RemoveMineralScatter"
+    - "{AS}/CustomMapRotation"
+    - "{AS}/Headless"
+    - "{AS}/HellfireBug"
+    - "{AS}/LaunchOverride"
+    - "{AS}/MissionLog"
+    - "{AS}/MissionSelector"
+    - "{AS}/ModIntegration"
+    - "{AS}/NativeSpawner"
+    - "{AS}/NoRagdolls"
+    - "{AS}/OpenHub"
+    - "{AS}/RemoveMeteors"
+    - "{AS}/SandboxUtilities"
+    - "{AS}/SpawnLogger"
+    - "{AS}/TakeMeHome"
+    - "{AS}/Testing"
+    - "{AS}/TestMod"
+    - "{AS}/VanitySearch"
+    
+  custom_difficulty_2:
+    - "{CD2}/Values"
+    - "{CD2}/Utils"
+    - "{CD2}/Registries"
+    - "{CD2}/Mutators"
+    - "{CD2}/Monitors"
+    - "{CD2}/ModuleComponents"
+    - "{CD2}/Core"
+    - "{CD2}/Builds"
+    - "{CD2}/Modules/Events"
+    - "{CD2}/Modules/TestModules"
+
+# --- Default Cooking Settings ---
+# These settings are used when running 'python build.py cook' without arguments,
+# or for any preset that does NOT have a 'cook_override'.
+cook_settings:
+  directories_to_never_cook:
+    # Aliases
+    - "@base_game"
+    - "@third_party_libs"
+    - "@elytras_mods_core"
+    - "@assembly_storm_core"
+    - "@custom_difficulty_2"
+    
+# --- Mod Presets ---
+presets:  
+  
+  ElytrasModManager:
+    friends:
+      - "Test"
+    assets:
+      include:
+        - "_ElytrasMods/ModManager/"
+      shared:
+        - "_Interop/StateManager/"
+
+  EEE:
+    overrides:
+      - source: './cooked'
+        description: 'Release the nexus files'
+    assets:
+      include:
+        - "_AssemblyStorm/"
+        - "NewEnemies/"
+        - "_ElytrasMods/EEE_lib/"
+
+  DescriptorViewer:
+    assets:
+      include:
+        - "_ElytrasMods/DescriptorViewer/"
+  
+  SaveNormalizer:
+    enabled: false
+    assets:
+      include:
+        - "_ElytrasMods/SaveNormalizer/"
+  
+  TerrainEditor:
+    enabled: false
+    assets:
+      include:
+        - "_ElytrasMods/TerrainEditor/"
+
+  CheatDash:
+    enabled: false
+    assets:
+      include:
+        - "_ElytrasMods/FastDash/"
+
+  NoPlantCarve:
+    enabled: false
+    assets:
+      include:
+        - "_ElytrasMods/NoExplodingPlantCarve/"
+  
+  TWIPepc:
+    enabled: false
+    assets:
+      include: 
+      - "_ElytrasMods/TWepc"
+
+  barragenuke:
+    enabled: false
+    assets:
+      include:
+      - "_ElytrasMods/BarrageLayer"
+
+  #  # --- EXAMPLE OF A PRESET USING THE NEW 'directories_to_cook' FEATURE ---
+  #DeepAssetsMod:
+  #  assets:
+  #    include:
+  #      - "{EM}/Deeply/Nested/AssetPack/Content/"
+  #      
+  #  # This mod needs assets from a folder that is normally excluded by the '@elytras_mods_core' alias.
+  #  # We override the cook settings to "punch a hole" through the exclusion rules.
+  #  cook_override:
+  #    directories_to_never_cook:
+  #      # We start with the same broad exclusions
+  #      - "@base_game"
+  #      - "@elytras_mods_core" 
+  #      # By not including @assembly_storm_core, we would be cooking all of it.
+  #      # Let's say we want to exclude all of AssemblyStorm EXCEPT for one utility folder.
+  #      - "{AS}" # This is a broad exclusion
+  #
+  #    directories_to_cook:
+  #      # This tells the script: "Even though {EM} is part of an exclusion alias, I need this specific path."
+  #      # The script will automatically generate exclusions for all siblings along this path.
+  #      - "{EM}/Deeply/Nested/AssetPack/Content"
+  #      
+  #      # This tells the script to make an exception for the broad "{AS}" exclusion above.
+  #      - "{AS}/Common/Utils"        
+
+  ## --- EXAMPLE OF A PRESET WITH A COOK OVERRIDE ---
+  #ExampleSpecialMod:
+  #  assets:
+  #     include:
+  #       - "_ElytrasMods/SpecialMod/"
+  #  # This preset will require its own dedicated cook.
+  #  # When packing, the script will look in 'staging/ExampleSpecialMod/FSD'.
+  #  cook_override:
+  #    directories_to_never_cook:
+  #       # We want to exclude the base game, but MAYBE include some 
+  #       # assembly storm stuff that is normally excluded by the global default.
+  #       - "@base_game"
+  #       - "@third_party_libs"
+  #       - "@elytras_mods_core"
+  #       # Note that "@assembly_storm_core" is NOT listed here, so those folders
+  #       # WILL be cooked for this specific mod.
+
+# --- Auto-Packaging ---
+package_unlisted_assets: false

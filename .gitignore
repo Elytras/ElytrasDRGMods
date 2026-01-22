@@ -122,6 +122,7 @@
 /UE4CodeCompletionFolders.txt
 /UE4CodeLitePreProcessor.txt
 asset_data.json
+!build_presets.yaml
 
 # Add exceptions for .dlls needed to run built version
 !/Binaries/Win64/*.dll
@@ -138,6 +139,7 @@ asset_data.json
 changes.diff
 autogen.txt
 DRGModdingAutomationScripts/
+Content/DRGlib/*
 
 # Ignore intermediate folders
 Intermediate/
