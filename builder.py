@@ -958,6 +958,122 @@ def _apply_override(override: Dict[str, str], target_dir: Path, context: str):
     print(Fore.GREEN + f"    ✓ Merged {file_count} file(s) from {source_path.name}/")
 
 
+def _collect_nocook_directories(
+    never_cook_raw: List[str], variables: Dict[str, str], aliases: Dict[str, List[str]]
+) -> Set[str]:
+    """Resolve directories to never cook, expanding aliases and variables."""
+    return _resolve_cook_paths(never_cook_raw, variables, aliases)
+
+
+def _collect_preset_asset_paths(presets: Dict[str, Any]) -> Set[str]:
+    """Extract all asset include paths from presets."""
+    asset_paths = set()
+    for preset_name, preset_data in presets.items():
+        assets_config = preset_data.get("assets", {})
+        if isinstance(assets_config, list):
+            assets_config = {"include": assets_config}
+
+        include_patterns = assets_config.get("include", [])
+        for pattern in include_patterns:
+            # Normalize path separators and remove trailing slashes
+            normalized = str(pattern).rstrip("/\\")
+            if normalized:
+                asset_paths.add(normalized)
+
+    return asset_paths
+
+
+def generate_gitignore(config: Dict[str, Any]):
+    """Generate .gitignore file based on cook settings and presets."""
+    print(Fore.GREEN + Style.BRIGHT + "=== Generating .gitignore ===")
+
+    # Collect directories to never cook (should be ignored)
+    variables = config.get("variables", {})
+    aliases = config.get("nocook_aliases", {})
+    default_cook_config = config.get("cook_settings", {})
+    never_cook_raw = default_cook_config.get("directories_to_never_cook", [])
+
+    nocook_dirs = _collect_nocook_directories(never_cook_raw, variables, aliases)
+
+    # Collect asset paths from presets (should NOT be ignored)
+    presets = config.get("presets", {})
+    preset_paths = _collect_preset_asset_paths(presets)
+
+    # Build generated content
+    generated_lines = [
+        "# AUTO-GENERATED START - Do not manually edit between these markers",
+        "# Regenerate with: python builder.py gitignore",
+        "",
+        "# Output directories",
+        "staging/",
+        "packaged/",
+        "build_*/",
+        "",
+        "# Directories that are cooked (engine content and excluded mods)",
+    ]
+
+    # Add nocook directories (prepended with Content/)
+    for dir_path in sorted(nocook_dirs):
+        generated_lines.append(f"Content/{dir_path}/")
+
+    generated_lines.extend(
+        [
+            "",
+            "# Exception: Include preset asset directories (these should be tracked)",
+        ]
+    )
+
+    # Add negation rules for preset paths (prepended with Content/)
+    for asset_path in sorted(preset_paths):
+        generated_lines.append(f"!Content/{asset_path}/")
+
+    generated_lines.append("# AUTO-GENERATED END")
+
+    # Write .gitignore file
+    gitignore_path = SCRIPT_DIR / ".gitignore"
+
+    try:
+        # Read existing .gitignore if it exists
+        existing_content = ""
+        if gitignore_path.exists():
+            with open(gitignore_path, "r") as f:
+                existing_content = f.read()
+
+        # Check if auto-generated block exists
+        start_marker = "# AUTO-GENERATED START"
+        end_marker = "# AUTO-GENERATED END"
+
+        if start_marker in existing_content and end_marker in existing_content:
+            # Replace content inside the block
+            start_idx = existing_content.find(start_marker)
+            end_idx = existing_content.find(end_marker) + len(end_marker)
+            new_content = (
+                existing_content[:start_idx]
+                + "\n".join(generated_lines)
+                + existing_content[end_idx:]
+            )
+        else:
+            # Append block to the end
+            if existing_content and not existing_content.endswith("\n"):
+                new_content = existing_content + "\n\n" + "\n".join(generated_lines)
+            else:
+                new_content = existing_content + "\n".join(generated_lines)
+
+        # Write the updated content
+        with open(gitignore_path, "w") as f:
+            f.write(new_content)
+
+        print(Fore.CYAN + f"  - Collected {len(nocook_dirs)} directories to ignore")
+        print(
+            Fore.CYAN
+            + f"  - Collected {len(preset_paths)} preset asset paths to include"
+        )
+        print(Fore.GREEN + f"✓ Successfully updated .gitignore at: {gitignore_path}")
+    except Exception as e:
+        print(Fore.RED + f"✗ Error writing .gitignore: {e}")
+        sys.exit(1)
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="A unified, preset-based build system for DRG mods."
@@ -967,6 +1083,11 @@ def main():
     # Add the edit command
     subparsers.add_parser(
         "edit", help="Open the build_presets.yaml file in your default editor"
+    )
+
+    # Add the gitignore command
+    subparsers.add_parser(
+        "gitignore", help="Auto-generate .gitignore based on cook settings and presets"
     )
 
     cook_parser = subparsers.add_parser(
@@ -991,6 +1112,8 @@ def main():
 
     if args.command == "edit":
         open_presets_in_editor()
+    elif args.command == "gitignore":
+        generate_gitignore(config)
     elif args.command == "cook":
         cook_assets(config, args.presets)
     elif args.command == "pack":
