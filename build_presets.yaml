@@ -6,6 +6,23 @@ ue4_cmd_path: "C:/Program Files/Epic Games/UE_4.27/Engine/Binaries/Win64/UE4Edit
 staging_dir: "staging"
 package_dir: "packaged"
 
+# --- Git Configuration ---
+# Settings for git integration and .gitignore auto-generation
+git_settings:
+  # Enable git integration
+  enabled: true
+  # Generate .gitignore based on cooking settings
+  auto_gitignore: true
+  # Additional paths to ignore (beyond those from cooking)
+  extra_ignores:
+    - "staging/"
+    - "packaged/"
+    - "build_*/"
+    - ".vs/"
+    - "Intermediate/"
+    - "Binaries/"
+    - "Saved/"
+
 # --- Path Variables ---
 # Use these in paths with {VAR_NAME}. They are expanded recursively.
 variables:

@@ -958,6 +958,273 @@ def _apply_override(override: Dict[str, str], target_dir: Path, context: str):
     print(Fore.GREEN + f"    ✓ Merged {file_count} file(s) from {source_path.name}/")
 
 
+# --- Git Integration ---
+
+
+def _is_git_repo() -> bool:
+    """Check if the current directory is a git repository."""
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--git-dir"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            cwd=SCRIPT_DIR,
+        )
+        return result.returncode == 0
+    except Exception:
+        return False
+
+
+def _get_all_included_asset_paths(config: Dict[str, Any]) -> Set[str]:
+    """Get all asset paths explicitly included in presets."""
+    included_paths = set()
+    all_presets = config.get("presets", {})
+
+    for preset_name, preset_data in all_presets.items():
+        if not preset_data.get("enabled", True):
+            continue
+
+        asset_config = preset_data.get("assets", {})
+        if isinstance(asset_config, list):
+            asset_config = {"shared": asset_config}
+
+        include_patterns = asset_config.get("include", [])
+        for pattern in include_patterns:
+            # Normalize path separators
+            normalized = pattern.replace("\\", "/").rstrip("/")
+            included_paths.add(normalized)
+
+    return included_paths
+
+
+def _generate_gitignore(config: Dict[str, Any]) -> Tuple[List[str], List[str]]:
+    """
+    Generate .gitignore entries based on cook settings and asset inclusions.
+    Returns (ignore_lines, track_lines) where track_lines use ! to negate ignores.
+    """
+    git_settings = config.get("git_settings", {})
+    if not git_settings.get("auto_gitignore", False):
+        return [], []
+
+    ignore_lines = []
+    track_lines = []
+    variables = config.get("variables", {})
+    aliases = config.get("nocook_aliases", {})
+
+    # Get the default cook settings
+    cook_settings = config.get("cook_settings", {})
+    never_cook_raw = cook_settings.get("directories_to_never_cook", [])
+
+    # Resolve the cook paths
+    never_cook_paths = _resolve_cook_paths(never_cook_raw, variables, aliases)
+
+    # Add resolved cook paths to gitignore
+    for path in sorted(never_cook_paths):
+        ignore_lines.append(f"Content/{path}/")
+
+    # Get all explicitly included asset paths from presets
+    included_asset_paths = _get_all_included_asset_paths(config)
+
+    # Add tracked entries for anything that's explicitly included
+    for asset_path in sorted(included_asset_paths):
+        # Convert to Content path format
+        if not asset_path.startswith("Content/"):
+            content_path = f"Content/{asset_path}/"
+        else:
+            content_path = f"{asset_path}/"
+
+        # Check if this path or any parent is in the never_cook list
+        is_ignored = False
+        for ignored in never_cook_paths:
+            ignored_path = f"Content/{ignored}/"
+            # If the included path is under an ignored path, we need to track it
+            if content_path.startswith(ignored_path) or ignored_path.startswith(
+                content_path.rstrip("/") + "/"
+            ):
+                is_ignored = True
+                break
+
+        if is_ignored:
+            # Negate the ignore pattern for this included asset
+            track_lines.append(f"!{content_path}")
+
+    # Add extra ignores from config
+    extra_ignores = git_settings.get("extra_ignores", [])
+    for path in extra_ignores:
+        if path and not path.startswith("#"):
+            ignore_lines.append(path)
+
+    return ignore_lines, track_lines
+
+
+def _read_gitignore_structure() -> Tuple[List[str], int, int]:
+    """
+    Read .gitignore and return (all_lines, start_marker_index, end_marker_index).
+    Returns (-1, -1) for indices if markers don't exist.
+    """
+    gitignore_path = SCRIPT_DIR / ".gitignore"
+    if not gitignore_path.exists():
+        return [], -1, -1
+
+    with open(gitignore_path, "r") as f:
+        lines = f.readlines()
+
+    start_idx = -1
+    end_idx = -1
+
+    for i, line in enumerate(lines):
+        if "#autogenstart" in line:
+            start_idx = i
+        elif "#autogenstop" in line:
+            end_idx = i
+            break
+
+    return lines, start_idx, end_idx
+
+
+def update_gitignore(config: Dict[str, Any]):
+    """Update .gitignore based on current cook settings and asset inclusions."""
+    if not _is_git_repo():
+        print(Fore.RED + "Error: Not a git repository. Initialize git first.")
+        sys.exit(1)
+
+    git_settings = config.get("git_settings", {})
+    if not git_settings.get("enabled", False):
+        print(Fore.YELLOW + "Git integration is disabled in config.")
+        return
+
+    gitignore_path = SCRIPT_DIR / ".gitignore"
+
+    print(Fore.CYAN + "  - Generating .gitignore entries from cook settings...")
+    ignore_entries, track_entries = _generate_gitignore(config)
+
+    # Read existing structure
+    existing_lines, start_marker, end_marker = _read_gitignore_structure()
+
+    # Build the autogenerated section
+    autogen_section = []
+    autogen_section.append("# #autogenstart - Auto-generated by builder.py\n")
+    autogen_section.append(
+        "# Based on cook_settings, git_settings, and preset asset inclusions\n"
+    )
+    autogen_section.append("\n")
+
+    # Add ignore entries
+    if ignore_entries:
+        autogen_section.append(
+            "# Content directories to ignore (based on directories_to_never_cook)\n"
+        )
+        for entry in ignore_entries:
+            autogen_section.append(f"{entry}\n")
+        autogen_section.append("\n")
+
+    # Add track entries (negations)
+    if track_entries:
+        autogen_section.append(
+            "# Explicitly track included assets (override ignores above)\n"
+        )
+        for entry in track_entries:
+            autogen_section.append(f"{entry}\n")
+        autogen_section.append("\n")
+
+    autogen_section.append("# #autogenstop\n")
+
+    # Determine where to place the autogenerated section
+    if start_marker != -1 and end_marker != -1:
+        # Replace existing autogenerated section
+        print(Fore.CYAN + "  - Replacing existing autogenerated section...")
+        output_lines = existing_lines[:start_marker]
+        output_lines.extend(autogen_section)
+        output_lines.extend(existing_lines[end_marker + 1 :])
+    else:
+        # Add at the bottom
+        print(Fore.CYAN + "  - Adding autogenerated section at the end...")
+        output_lines = existing_lines
+        if existing_lines and not existing_lines[-1].endswith("\n"):
+            output_lines.append("\n")
+        output_lines.append("\n")
+        output_lines.extend(autogen_section)
+
+    # Write the file
+    with open(gitignore_path, "w") as f:
+        f.writelines(output_lines)
+
+    total_entries = len(ignore_entries) + len(track_entries)
+    print(
+        Fore.GREEN + f"✓ Updated .gitignore with {total_entries} autogenerated entries"
+    )
+    print(
+        Fore.CYAN
+        + f"  - {len(ignore_entries)} ignore patterns, {len(track_entries)} track patterns"
+    )
+
+
+def git_acp(message: str, config: Dict[str, Any]):
+    """Add all changes, commit with message, and push."""
+    if not _is_git_repo():
+        print(Fore.RED + "Error: Not a git repository.")
+        sys.exit(1)
+
+    git_settings = config.get("git_settings", {})
+    if not git_settings.get("enabled", False):
+        print(Fore.YELLOW + "Git integration is disabled in config.")
+        return
+
+    try:
+        # Stage all changes
+        print(Fore.CYAN + "  - Running 'git add .'...")
+        result = subprocess.run(
+            ["git", "add", "."],
+            cwd=SCRIPT_DIR,
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode != 0:
+            print(Fore.RED + f"Error during git add: {result.stderr}")
+            sys.exit(1)
+
+        # Check if there are changes to commit
+        result = subprocess.run(
+            ["git", "status", "--porcelain"],
+            cwd=SCRIPT_DIR,
+            capture_output=True,
+            text=True,
+        )
+        if not result.stdout.strip():
+            print(Fore.YELLOW + "No changes to commit.")
+            return
+
+        # Commit changes
+        print(Fore.CYAN + f"  - Running 'git commit -m \"{message}\"'...")
+        result = subprocess.run(
+            ["git", "commit", "-m", message],
+            cwd=SCRIPT_DIR,
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode != 0:
+            print(Fore.RED + f"Error during git commit: {result.stderr}")
+            sys.exit(1)
+        print(Fore.GREEN + result.stdout.strip())
+
+        # Push changes
+        print(Fore.CYAN + "  - Running 'git push'...")
+        result = subprocess.run(
+            ["git", "push"],
+            cwd=SCRIPT_DIR,
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode != 0:
+            print(Fore.YELLOW + f"Warning during git push: {result.stderr}")
+            print(Fore.CYAN + result.stdout.strip())
+        else:
+            print(Fore.GREEN + "✓ Successfully pushed changes")
+    except Exception as e:
+        print(Fore.RED + f"Error during git operations: {e}")
+        sys.exit(1)
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="A unified, preset-based build system for DRG mods."
@@ -986,6 +1253,25 @@ def main():
         nargs="*",
         help="Optional: Specific preset names to pack. If not provided, all enabled presets will be packed.",
     )
+
+    # Add git commands
+    git_parser = subparsers.add_parser("git", help="Git integration commands.")
+    git_subparsers = git_parser.add_subparsers(dest="git_command", required=True)
+
+    git_subparsers.add_parser(
+        "update-gitignore",
+        help="Update .gitignore based on cook settings and git configuration.",
+    )
+
+    acp_parser = git_subparsers.add_parser(
+        "acp",
+        help="Add all changes, commit with message, and push (add-commit-push).",
+    )
+    acp_parser.add_argument(
+        "message",
+        help="Commit message",
+    )
+
     args = parser.parse_args()
     config = load_config()
 
@@ -995,6 +1281,11 @@ def main():
         cook_assets(config, args.presets)
     elif args.command == "pack":
         pack_assets(config, args.presets)
+    elif args.command == "git":
+        if args.git_command == "update-gitignore":
+            update_gitignore(config)
+        elif args.git_command == "acp":
+            git_acp(args.message, config)
 
 
 if __name__ == "__main__":
