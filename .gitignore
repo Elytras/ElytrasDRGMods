@@ -139,7 +139,9 @@ asset_data.json
 changes.diff
 autogen.txt
 DRGModdingAutomationScripts/
-Content/DRGlib/*
+!*.uasset
+!*.umap
+!*.uexp
 
 # Ignore intermediate folders
 Intermediate/

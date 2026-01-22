@@ -141,6 +141,7 @@ cook_settings:
 presets:  
   
   ElytrasModManager:
+    enabled: true
     friends:
       - "Test"
     assets:
@@ -150,6 +151,7 @@ presets:
         - "_Interop/StateManager/"
 
   EEE:
+    enabled: true
     overrides:
       - source: './cooked'
         description: 'Release the nexus files'
@@ -160,6 +162,7 @@ presets:
         - "_ElytrasMods/EEE_lib/"
 
   DescriptorViewer:
+    enabled: true
     assets:
       include:
         - "_ElytrasMods/DescriptorViewer/"
