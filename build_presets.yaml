@@ -110,6 +110,9 @@ nocook_aliases:
     - "{CD2}/Modules/Events"
     - "{CD2}/Modules/TestModules"
 
+  all_of_assembly:
+    - "{AS}/"
+
 # --- Default Cooking Settings ---
 # These settings are used when running 'python build.py cook' without arguments,
 # or for any preset that does NOT have a 'cook_override'.
@@ -121,10 +124,18 @@ cook_settings:
     - "@elytras_mods_core"
     - "@assembly_storm_core"
     - "@custom_difficulty_2"
+    - "@all_of_assembly"
     
 # --- Mod Presets ---
 presets:  
   
+  Pglstuff:
+    enabled: true
+    assets:
+
+      include: 
+        - "_ElytrasMods/Pglstuff/"
+
   ElytrasModManager:
     enabled: true
     friends:
@@ -136,7 +147,7 @@ presets:
         - "_Interop/StateManager/"
 
   EEE:
-    enabled: true
+    enabled: false
     overrides:
       - source: './cooked'
         description: 'Release the nexus files'
@@ -147,7 +158,7 @@ presets:
         - "_ElytrasMods/EEE_lib/"
 
   DescriptorViewer:
-    enabled: true
+    enabled: false
     assets:
       include:
         - "_ElytrasMods/DescriptorViewer/"
